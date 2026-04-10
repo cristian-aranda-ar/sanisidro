@@ -6,7 +6,7 @@ RUN curl -sO https://raw.githubusercontent.com/wp-cli/builds/gh-pages/phar/wp-cl
     && mv wp-cli.phar /usr/local/bin/wp
 
 # Install mysql client for DB import and gunzip
-RUN apt-get update && apt-get install -y default-mysql-client gunzip && rm -rf /var/lib/apt/lists/*
+RUN apt-get update && apt-get install -y default-mysql-client gzip && rm -rf /var/lib/apt/lists/*
 
 # Copy theme into image
 COPY theme/sanisidro-theme /var/www/html/wp-content/themes/sanisidro-theme
