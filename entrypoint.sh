@@ -102,12 +102,15 @@ if ! grep -q 'HTTP_X_FORWARDED_PROTO' /var/www/html/wp-config.php 2>/dev/null; t
     /var/www/html/wp-config.php
 fi
 
-# ── Always update site URL and activate theme ─────────────────────────────────
+# ── Always update site URL, replace localhost refs, activate theme ─────────────
 if [ -n "$RAILWAY_PUBLIC_DOMAIN" ]; then
   SITE_URL="https://$RAILWAY_PUBLIC_DOMAIN"
   echo "[entrypoint] Setting site URL to $SITE_URL"
   wp --allow-root --path=/var/www/html option update siteurl "$SITE_URL" || true
   wp --allow-root --path=/var/www/html option update home "$SITE_URL" || true
+  # Replace any localhost URLs still in post content / meta
+  wp --allow-root --path=/var/www/html search-replace "http://localhost:8080" "$SITE_URL" --all-tables --quiet 2>/dev/null || true
+  wp --allow-root --path=/var/www/html search-replace "http://localhost:8888" "$SITE_URL" --all-tables --quiet 2>/dev/null || true
   wp --allow-root --path=/var/www/html theme activate sanisidro-theme 2>/dev/null || true
 fi
 
