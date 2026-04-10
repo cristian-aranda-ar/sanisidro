@@ -85,4 +85,11 @@ else
   echo "[entrypoint] Database already imported, skipping."
 fi
 
+# Fix permissions so Apache (www-data) can read all files
+chown -R www-data:www-data /var/www/html 2>/dev/null || true
+
+# Debug: confirm WordPress is set up
+echo "[entrypoint] wp-config.php exists: $([ -f /var/www/html/wp-config.php ] && echo YES || echo NO)"
+echo "[entrypoint] index.php exists:     $([ -f /var/www/html/index.php ] && echo YES || echo NO)"
+
 exec apache2-foreground
