@@ -1,0 +1,12 @@
+# Local Docker
+uploads/
+themes/
+plugins/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Env
+.env
+*.env.local

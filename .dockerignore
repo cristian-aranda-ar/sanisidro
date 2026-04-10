@@ -1,0 +1,7 @@
+uploads/
+themes/
+plugins/
+.git
+.gitignore
+.DS_Store
+docker-compose.yml
