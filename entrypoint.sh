@@ -13,12 +13,16 @@ if [ ! -f /var/www/html/index.php ]; then
   echo "[entrypoint] WordPress core files copied."
 fi
 
-# ── Restore uploads seed (VOLUME /var/www/html loses COPY layers at runtime) ──
-if [ -d /uploads-seed ] && [ ! -f /var/www/html/wp-content/uploads/2026/04/slide-1.png ]; then
-  echo "[entrypoint] Restoring uploads from seed..."
-  cp -rn /uploads-seed/. /var/www/html/wp-content/uploads/
+# ── Restore uploads seed ──────────────────────────────────────────────────────
+# Always sync /uploads-seed → wp-content/uploads (no-overwrite so existing wins)
+if [ -d /uploads-seed ]; then
+  echo "[entrypoint] Syncing uploads from seed..."
+  mkdir -p /var/www/html/wp-content/uploads
+  cp -r /uploads-seed/. /var/www/html/wp-content/uploads/
   chown -R www-data:www-data /var/www/html/wp-content/uploads
-  echo "[entrypoint] Uploads restored."
+  echo "[entrypoint] Uploads ready. Files: $(find /var/www/html/wp-content/uploads -type f | wc -l)"
+else
+  echo "[entrypoint] WARNING: /uploads-seed not found"
 fi
 
 # ── Debug: show DB-related env vars (no passwords) ────────────────────────────
