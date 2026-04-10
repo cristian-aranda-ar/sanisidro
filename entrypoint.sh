@@ -4,37 +4,44 @@ set -e
 # Run official WP entrypoint to set up files + wp-config.php
 /usr/local/bin/docker-entrypoint.sh true
 
-# ── Debug: show available MySQL-related env vars (no passwords) ────────────
-echo "[entrypoint] MySQL env vars available:"
-env | grep -iE "^(MYSQL|DATABASE|WORDPRESS_DB)" | grep -v -iE "PASS|PASSWORD" | sort || true
+# ── Debug: show ALL env vars that might contain DB info ───────────────────────
+echo "[entrypoint] All DB-related env vars (no passwords):"
+env | grep -iE "(MYSQL|DATABASE|POSTGRES|DB_|_DB)" | grep -v -iE "(PASS|SECRET|PWD)" | sort || true
 
-# ── Resolve DB connection ──────────────────────────────────────────────────
-# Try Railway MySQL plugin variable formats (with and without underscores)
-DB_HOST_ONLY="${MYSQL_HOST:-${MYSQLHOST:-${WORDPRESS_DB_HOST%%:*}}}"
-DB_PORT="${MYSQL_PORT:-${MYSQLPORT:-3306}}"
-DB_USER="${MYSQL_USER:-${MYSQLUSER:-${WORDPRESS_DB_USER}}}"
-DB_PASS="${MYSQL_PASSWORD:-${MYSQLPASSWORD:-${WORDPRESS_DB_PASSWORD}}}"
-DB_NAME="${MYSQL_DATABASE:-${MYSQLDATABASE:-${WORDPRESS_DB_NAME}}}"
+# ── Resolve from URL first (most reliable on Railway) ─────────────────────────
+# Railway typically exposes MYSQL_PRIVATE_URL or DATABASE_URL for linked services
+_URL="${MYSQL_PRIVATE_URL:-${MYSQL_URL:-${DATABASE_URL:-}}}"
 
-# If host still empty, try parsing from MYSQL_URL or DATABASE_URL
-if [ -z "$DB_HOST_ONLY" ] && [ -n "${MYSQL_URL:-${DATABASE_URL:-}}" ]; then
-  URL="${MYSQL_URL:-$DATABASE_URL}"
-  DB_HOST_ONLY=$(echo "$URL" | sed -E 's|.*@([^:/]+)[:/].*|\1|')
-  DB_PORT=$(echo "$URL"     | sed -E 's|.*@[^:]+:([0-9]+)/.*|\1|')
-  DB_NAME=$(echo "$URL"     | sed -E 's|.*/([^?]+).*|\1|')
-  DB_USER=$(echo "$URL"     | sed -E 's|.*//([^:]+):.*|\1|')
-  DB_PASS=$(echo "$URL"     | sed -E 's|.*://[^:]+:([^@]+)@.*|\1|')
+if [ -n "$_URL" ]; then
+  echo "[entrypoint] Parsing connection from URL..."
+  # mysql://user:pass@host:port/dbname  OR  mysql://user:pass@host/dbname
+  DB_USER=$(echo "$_URL" | sed -E 's|^[a-z]+://([^:]+):.*|\1|')
+  DB_PASS=$(echo "$_URL" | sed -E 's|^[a-z]+://[^:]+:([^@]+)@.*|\1|')
+  DB_HOST_ONLY=$(echo "$_URL" | sed -E 's|^[a-z]+://[^@]+@([^:/]+)[:/].*|\1|')
+  DB_PORT=$(echo "$_URL" | sed -E 's|^[a-z]+://[^@]+@[^:]+:([0-9]+)/.*|\1|')
+  DB_NAME=$(echo "$_URL" | sed -E 's|^[a-z]+://[^@]+@[^/]+/([^?]+).*|\1|')
+  # Port may not be in URL — default to 3306
+  [ -z "$DB_PORT" ] || ! echo "$DB_PORT" | grep -qE '^[0-9]+$' && DB_PORT=3306
 fi
 
-echo "[entrypoint] DB → host=$DB_HOST_ONLY port=$DB_PORT db=$DB_NAME"
+# ── Fallback: individual env vars (many naming conventions) ───────────────────
+DB_HOST_ONLY="${DB_HOST_ONLY:-${MYSQL_HOST:-${MYSQLHOST:-${MYSQL_PRIVATE_HOST:-${WORDPRESS_DB_HOST%%:*}}}}}"
+DB_PORT="${DB_PORT:-${MYSQL_PORT:-${MYSQLPORT:-${MYSQL_PRIVATE_PORT:-3306}}}}"
+DB_USER="${DB_USER:-${MYSQL_USER:-${MYSQLUSER:-${WORDPRESS_DB_USER}}}}"
+DB_PASS="${DB_PASS:-${MYSQL_PASSWORD:-${MYSQLPASSWORD:-${WORDPRESS_DB_PASSWORD}}}}"
+DB_NAME="${DB_NAME:-${MYSQL_DATABASE:-${MYSQLDATABASE:-${WORDPRESS_DB_NAME}}}}"
+
+echo "[entrypoint] DB → host=$DB_HOST_ONLY port=$DB_PORT db=$DB_NAME user=$DB_USER"
 
 if [ -z "$DB_HOST_ONLY" ]; then
-  echo "[entrypoint] ERROR: Could not resolve DB host. Check your Railway env vars."
+  echo "[entrypoint] ERROR: Could not resolve DB host."
+  echo "[entrypoint] Set WORDPRESS_DB_HOST (and USER/PASSWORD/NAME) in your Railway service variables,"
+  echo "[entrypoint] referencing your MySQL service: e.g. \${{MySQL.MYSQLHOST}}"
   exit 1
 fi
 
-# ── Wait for DB ────────────────────────────────────────────────────────────
-echo "[entrypoint] Waiting for database..."
+# ── Wait for DB ────────────────────────────────────────────────────────────────
+echo "[entrypoint] Waiting for database at $DB_HOST_ONLY:$DB_PORT..."
 for i in $(seq 1 40); do
   if mysqladmin ping -h"$DB_HOST_ONLY" -P"$DB_PORT" -u"$DB_USER" -p"$DB_PASS" --silent 2>/dev/null; then
     echo "[entrypoint] Database ready."
@@ -45,7 +52,7 @@ for i in $(seq 1 40); do
   sleep 3
 done
 
-# ── Import DB if tables missing ────────────────────────────────────────────
+# ── Import DB if tables missing ───────────────────────────────────────────────
 TABLE_COUNT=$(mysql -h"$DB_HOST_ONLY" -P"$DB_PORT" -u"$DB_USER" -p"$DB_PASS" "$DB_NAME" \
   -e "SHOW TABLES LIKE 'wp_posts';" 2>/dev/null | wc -l)
 
