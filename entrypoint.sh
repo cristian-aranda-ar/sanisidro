@@ -52,7 +52,13 @@ if [ ! -f /var/www/html/wp-config.php ]; then
     "--dbuser=${DB_USER}" \
     "--dbpass=${DB_PASS}" \
     "--dbprefix=${WORDPRESS_TABLE_PREFIX:-wp_}" \
-    --skip-check
+    --skip-check \
+    --extra-php <<'PHP'
+/* Trust Railway's HTTPS proxy so WordPress generates https:// URLs */
+if ( isset( $_SERVER['HTTP_X_FORWARDED_PROTO'] ) && $_SERVER['HTTP_X_FORWARDED_PROTO'] === 'https' ) {
+    $_SERVER['HTTPS'] = 'on';
+}
+PHP
   echo "[entrypoint] wp-config.php created."
 fi
 
@@ -87,6 +93,13 @@ if [ ! -d /var/www/html/wp-content/plugins/woocommerce ]; then
   echo "[entrypoint] Installing WooCommerce..."
   wp --allow-root --path=/var/www/html plugin install woocommerce --activate
   echo "[entrypoint] WooCommerce installed."
+fi
+
+# ── Ensure HTTPS proxy fix is in wp-config.php ───────────────────────────────
+if ! grep -q 'HTTP_X_FORWARDED_PROTO' /var/www/html/wp-config.php 2>/dev/null; then
+  echo "[entrypoint] Adding HTTPS proxy fix to wp-config.php..."
+  sed -i "s|<?php|<?php\n/* Trust Railway HTTPS proxy */\nif ( isset( \$_SERVER['HTTP_X_FORWARDED_PROTO'] ) \&\& \$_SERVER['HTTP_X_FORWARDED_PROTO'] === 'https' ) { \$_SERVER['HTTPS'] = 'on'; }|" \
+    /var/www/html/wp-config.php
 fi
 
 # ── Always update site URL and activate theme ─────────────────────────────────
