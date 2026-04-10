@@ -5,7 +5,7 @@ RUN curl -sO https://raw.githubusercontent.com/wp-cli/builds/gh-pages/phar/wp-cl
     && chmod +x wp-cli.phar \
     && mv wp-cli.phar /usr/local/bin/wp
 
-# Install mysql client for DB import and gunzip
+# Install mysql client and gzip
 RUN apt-get update && apt-get install -y default-mysql-client gzip && rm -rf /var/lib/apt/lists/*
 
 # Copy theme into image
@@ -14,9 +14,8 @@ COPY theme/sanisidro-theme /var/www/html/wp-content/themes/sanisidro-theme
 # Copy DB dump
 COPY db/dump.sql.gz /docker-entrypoint-initdb.d/dump.sql.gz
 
-# Copy custom entrypoint
+# Copy and set custom entrypoint
 COPY entrypoint.sh /usr/local/bin/custom-entrypoint.sh
 RUN chmod +x /usr/local/bin/custom-entrypoint.sh
 
 ENTRYPOINT ["custom-entrypoint.sh"]
-CMD ["apache2-foreground"]
