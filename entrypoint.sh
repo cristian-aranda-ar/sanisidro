@@ -13,6 +13,14 @@ if [ ! -f /var/www/html/index.php ]; then
   echo "[entrypoint] WordPress core files copied."
 fi
 
+# ── Restore uploads seed (VOLUME /var/www/html loses COPY layers at runtime) ──
+if [ -d /uploads-seed ] && [ ! -f /var/www/html/wp-content/uploads/2026/04/slide-1.png ]; then
+  echo "[entrypoint] Restoring uploads from seed..."
+  cp -rn /uploads-seed/. /var/www/html/wp-content/uploads/
+  chown -R www-data:www-data /var/www/html/wp-content/uploads
+  echo "[entrypoint] Uploads restored."
+fi
+
 # ── Debug: show DB-related env vars (no passwords) ────────────────────────────
 echo "[entrypoint] DB env vars:"
 env | grep -iE "(MYSQL|DATABASE|DB_|_DB)" | grep -v -iE "(PASS|SECRET|PWD)" | sort || true

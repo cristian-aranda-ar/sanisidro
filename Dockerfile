@@ -11,8 +11,9 @@ RUN apt-get update && apt-get install -y default-mysql-client gzip && rm -rf /va
 # Copy theme into image
 COPY theme/sanisidro-theme /var/www/html/wp-content/themes/sanisidro-theme
 
-# Copy uploads (product images, slides, etc.)
-COPY uploads /var/www/html/wp-content/uploads
+# Copy uploads to a seed dir outside the VOLUME so the entrypoint can restore them
+# (Files copied into VOLUME /var/www/html at build time are lost at runtime)
+COPY uploads /uploads-seed
 
 # Copy DB dump
 COPY db/dump.sql.gz /docker-entrypoint-initdb.d/dump.sql.gz
