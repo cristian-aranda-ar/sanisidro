@@ -42,8 +42,9 @@ fi
 
 # ── Wait for DB ────────────────────────────────────────────────────────────────
 echo "[entrypoint] Waiting for database at $DB_HOST_ONLY:$DB_PORT..."
+export MYSQL_PWD="$DB_PASS"
 for i in $(seq 1 40); do
-  if mysqladmin ping -h"$DB_HOST_ONLY" -P"$DB_PORT" -u"$DB_USER" -p"$DB_PASS" --silent 2>/dev/null; then
+  if mysqladmin ping -h"$DB_HOST_ONLY" -P"$DB_PORT" -u"$DB_USER" --silent --connect-timeout=3 2>/dev/null; then
     echo "[entrypoint] Database ready."
     break
   fi
@@ -53,13 +54,13 @@ for i in $(seq 1 40); do
 done
 
 # ── Import DB if tables missing ───────────────────────────────────────────────
-TABLE_COUNT=$(mysql -h"$DB_HOST_ONLY" -P"$DB_PORT" -u"$DB_USER" -p"$DB_PASS" "$DB_NAME" \
+TABLE_COUNT=$(mysql -h"$DB_HOST_ONLY" -P"$DB_PORT" -u"$DB_USER" "$DB_NAME" \
   -e "SHOW TABLES LIKE 'wp_posts';" 2>/dev/null | wc -l)
 
 if [ "$TABLE_COUNT" -eq 0 ]; then
   echo "[entrypoint] Importing database..."
   gunzip -c /docker-entrypoint-initdb.d/dump.sql.gz \
-    | mysql -h"$DB_HOST_ONLY" -P"$DB_PORT" -u"$DB_USER" -p"$DB_PASS" "$DB_NAME"
+    | mysql -h"$DB_HOST_ONLY" -P"$DB_PORT" -u"$DB_USER" "$DB_NAME"
 
   if [ -n "$RAILWAY_PUBLIC_DOMAIN" ]; then
     SITE_URL="https://$RAILWAY_PUBLIC_DOMAIN"
