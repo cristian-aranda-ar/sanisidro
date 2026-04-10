@@ -4,28 +4,34 @@ set -e
 # Run official WP entrypoint to set up files + wp-config.php
 /usr/local/bin/docker-entrypoint.sh true
 
-# ── Resolve DB connection ──────────────────────────────────────────────────
-# Railway MySQL plugin exposes MYSQL_HOST / MYSQL_PORT directly.
-# WORDPRESS_DB_HOST may be "host:port" or just "host" or empty.
+# ── Debug: show available MySQL-related env vars (no passwords) ────────────
+echo "[entrypoint] MySQL env vars available:"
+env | grep -iE "^(MYSQL|DATABASE|WORDPRESS_DB)" | grep -v -iE "PASS|PASSWORD" | sort || true
 
-if [ -n "$MYSQL_HOST" ]; then
-  DB_HOST_ONLY="$MYSQL_HOST"
-  DB_PORT="${MYSQL_PORT:-3306}"
-elif [ -n "$WORDPRESS_DB_HOST" ]; then
-  DB_HOST_ONLY="${WORDPRESS_DB_HOST%%:*}"
-  DB_PORT="${WORDPRESS_DB_HOST##*:}"
-  # If no colon was present, port equals host — reset to default
-  [ "$DB_PORT" = "$DB_HOST_ONLY" ] && DB_PORT="3306"
-else
-  echo "[entrypoint] ERROR: No DB host found in env vars. Aborting."
-  exit 1
+# ── Resolve DB connection ──────────────────────────────────────────────────
+# Try Railway MySQL plugin variable formats (with and without underscores)
+DB_HOST_ONLY="${MYSQL_HOST:-${MYSQLHOST:-${WORDPRESS_DB_HOST%%:*}}}"
+DB_PORT="${MYSQL_PORT:-${MYSQLPORT:-3306}}"
+DB_USER="${MYSQL_USER:-${MYSQLUSER:-${WORDPRESS_DB_USER}}}"
+DB_PASS="${MYSQL_PASSWORD:-${MYSQLPASSWORD:-${WORDPRESS_DB_PASSWORD}}}"
+DB_NAME="${MYSQL_DATABASE:-${MYSQLDATABASE:-${WORDPRESS_DB_NAME}}}"
+
+# If host still empty, try parsing from MYSQL_URL or DATABASE_URL
+if [ -z "$DB_HOST_ONLY" ] && [ -n "${MYSQL_URL:-${DATABASE_URL:-}}" ]; then
+  URL="${MYSQL_URL:-$DATABASE_URL}"
+  DB_HOST_ONLY=$(echo "$URL" | sed -E 's|.*@([^:/]+)[:/].*|\1|')
+  DB_PORT=$(echo "$URL"     | sed -E 's|.*@[^:]+:([0-9]+)/.*|\1|')
+  DB_NAME=$(echo "$URL"     | sed -E 's|.*/([^?]+).*|\1|')
+  DB_USER=$(echo "$URL"     | sed -E 's|.*//([^:]+):.*|\1|')
+  DB_PASS=$(echo "$URL"     | sed -E 's|.*://[^:]+:([^@]+)@.*|\1|')
 fi
 
-DB_USER="${MYSQL_USER:-${WORDPRESS_DB_USER}}"
-DB_PASS="${MYSQL_PASSWORD:-${WORDPRESS_DB_PASSWORD}}"
-DB_NAME="${MYSQL_DATABASE:-${WORDPRESS_DB_NAME}}"
+echo "[entrypoint] DB → host=$DB_HOST_ONLY port=$DB_PORT db=$DB_NAME"
 
-echo "[entrypoint] DB → $DB_HOST_ONLY:$DB_PORT / $DB_NAME"
+if [ -z "$DB_HOST_ONLY" ]; then
+  echo "[entrypoint] ERROR: Could not resolve DB host. Check your Railway env vars."
+  exit 1
+fi
 
 # ── Wait for DB ────────────────────────────────────────────────────────────
 echo "[entrypoint] Waiting for database..."
