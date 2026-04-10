@@ -78,17 +78,17 @@ if [ "$TABLE_COUNT" -eq 0 ]; then
   gunzip -c /docker-entrypoint-initdb.d/dump.sql.gz \
     | mysql -h"$DB_HOST_ONLY" -P"$DB_PORT" -u"$DB_USER" "$DB_NAME"
   echo "[entrypoint] Import done."
-
-  if [ -n "$RAILWAY_PUBLIC_DOMAIN" ]; then
-    SITE_URL="https://$RAILWAY_PUBLIC_DOMAIN"
-    echo "[entrypoint] Setting site URL to $SITE_URL"
-    wp --allow-root --path=/var/www/html option update siteurl "$SITE_URL" || true
-    wp --allow-root --path=/var/www/html option update home "$SITE_URL" || true
-    wp --allow-root --path=/var/www/html theme activate sanisidro-theme 2>/dev/null || true
-  fi
-  echo "[entrypoint] Setup complete."
 else
   echo "[entrypoint] Database already imported, skipping."
+fi
+
+# ── Always update site URL and activate theme ─────────────────────────────────
+if [ -n "$RAILWAY_PUBLIC_DOMAIN" ]; then
+  SITE_URL="https://$RAILWAY_PUBLIC_DOMAIN"
+  echo "[entrypoint] Setting site URL to $SITE_URL"
+  wp --allow-root --path=/var/www/html option update siteurl "$SITE_URL" || true
+  wp --allow-root --path=/var/www/html option update home "$SITE_URL" || true
+  wp --allow-root --path=/var/www/html theme activate sanisidro-theme 2>/dev/null || true
 fi
 
 # ── Fix permissions & start Apache ────────────────────────────────────────────
