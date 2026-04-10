@@ -82,6 +82,13 @@ else
   echo "[entrypoint] Database already imported, skipping."
 fi
 
+# ── Install WooCommerce if not present ────────────────────────────────────────
+if [ ! -d /var/www/html/wp-content/plugins/woocommerce ]; then
+  echo "[entrypoint] Installing WooCommerce..."
+  wp --allow-root --path=/var/www/html plugin install woocommerce --activate
+  echo "[entrypoint] WooCommerce installed."
+fi
+
 # ── Always update site URL and activate theme ─────────────────────────────────
 if [ -n "$RAILWAY_PUBLIC_DOMAIN" ]; then
   SITE_URL="https://$RAILWAY_PUBLIC_DOMAIN"
